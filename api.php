@@ -5,6 +5,8 @@
     header("Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT, DELETE");
     header("Allow: GET, POST, OPTIONS, PUT, DELETE");
 
+    include "db_rrhh.php";
+
     class Api extends Rest{
 
         public $dbConn;
@@ -408,8 +410,31 @@
             $no_aplican = $this->param['no_aplican'];
 
             try {
+
+                /* Usuario que reaiza el control de calidad */ 
+
+                if(!isset($_SESSION))
+                {
+                    session_start();
+                }
+
+                $nit = $_SESSION['nit'];
+                    
+                $dbc_rrhh = new Db_RRHH();
+                $conn_rrhh = $dbc_rrhh->connect();
+
+                $query = "  SELECT *
+                            FROM RH_EMPLEADOS
+                            WHERE NIT = '$nit'";
+
+                $stid = oci_parse($conn_rrhh, $query);
+                oci_execute($stid);
+
+                $usuario = oci_fetch_array($stid, OCI_ASSOC);
                 
-                $query = "  INSERT INTO CATASTRO.CDO_CALIDAD_CC (DOCUMENTO, ANIO, FECHA, ACIERTO, COMENTARIO) VALUES ('$documento->DOCUMENTO', '$documento->ANIO', SYSDATE, 'S', '$comentario')";
+                $usuario = $usuario["USUARIO"];
+
+                $query = "  INSERT INTO CATASTRO.CDO_CALIDAD_CC (DOCUMENTO, ANIO, FECHA, ACIERTO, COMENTARIO, ENCARGADO_CALIDAD) VALUES ('$documento->DOCUMENTO', '$documento->ANIO', SYSDATE, 'S', '$comentario', '$usuario')";
 
                 $stid = oci_parse($this->dbConn, $query);
 
@@ -977,7 +1002,220 @@
 
         public function generar_reportes(){
 
-            
+            $fecha = $this->param["fecha"];
+
+            /* Obtener usuario  */
+
+            //$this->returnResponse(SUCCESS_RESPONSE, $usuario);
+
+            // Verificaciones
+            $sql = "SELECT *
+                    FROM CATASTRO.CDO_DETALLE_CRITERIO_CC";
+
+            $stid = oci_parse($this->dbConn, $sql);
+            oci_execute($stid);
+
+            $criterios = [];
+
+            while ($row = oci_fetch_array($stid, OCI_ASSOC)) {
+                
+                $criterios [] = $row;
+
+            }
+
+            $sql = "SELECT CD.CODIGOCLASE, CD.DOCUMENTO, CD.ANIO, TO_CHAR(CD.FECHA, 'DD/MM/YYYY') AS FECHA_INGRESO, 
+                    CB.USER_APLIC USUARIO, TO_CHAR(CB.FECHA_FINALIZACION, 'DD/MM/YYYY') AS FECHA_FINALIZACION, CB.CODTRAMITE, CT.NOMBRE TRAMITE
+                    FROM CDO_BANDEJA CB, CDO_DOCUMENTO CD, CDO_TRAMITE CT
+                    WHERE CB.CODIGOCLASE = CD.CODIGOCLASE
+                    AND CB.DOCUMENTO = CD.DOCUMENTO
+                    AND CB.ANIO = CD.ANIO
+                    AND CB.CODTRAMITE = CT.CODTRAMITE
+                    AND CB.CODTRAMITE IN (322,323)
+                    AND TO_CHAR(CD.FECHA,'YYYY-MM') = '$fecha'
+                    and CB.DEPENDENCIA NOT IN (100,99)
+                    AND CB.USER_APLIC NOT IN ('GCHAJCHALAC')
+                    AND CD.DOCUMENTO IN (
+                        SELECT DOCUMENTO 
+                        FROM CATASTRO.CDO_CALIDAD_CC 
+                        WHERE TO_CHAR(FECHA, 'YYYY-MM') = '$fecha'
+                        GROUP BY DOCUMENTO
+                        HAVING COUNT(*) > 1
+                    )
+                    ORDER BY CD.FECHA ASC";
+
+            $stid = oci_parse($this->dbConn, $sql);
+            oci_execute($stid);
+
+            $expedientes = [];
+
+            while ($row = oci_fetch_array($stid, OCI_ASSOC)) {
+
+                $temp_criterios = [];
+
+                $documento = $row["DOCUMENTO"];
+                $anio = $row["ANIO"];
+
+                foreach ($criterios as $criterio) {
+                    
+                    $id_criterio = $criterio["ID"];
+
+                    $sql = "SELECT *
+                            FROM CATASTRO.CDO_ERROR_CALIDAD_CC
+                            WHERE ID_CRITERIO = $id_criterio
+                            AND ID_CALIDAD IN (
+                                SELECT ID
+                                FROM CATASTRO.CDO_CALIDAD_CC
+                                WHERE DOCUMENTO = '$documento'
+                                AND ANIO = '$anio'
+                            )";
+                    
+                    $stid_ = oci_parse($this->dbConn, $sql);
+                    oci_execute($stid_);
+
+                    $result = oci_fetch_array($stid_, OCI_ASSOC);
+
+                    if ($result) {
+                        
+                        $temp_criterios [] = 1;
+
+                    }else{
+
+                        $temp_criterios [] = 0;
+
+                    }
+
+                }
+
+                $row["CRITERIOS"] = $temp_criterios;
+                $expedientes [] = $row; 
+
+            }
+
+            $encabezado1 = [
+                [
+                    "TEXT" => "",
+                    "COLSPAN" => 5
+                ],
+                [
+                    "TEXT" => "Hallazgos",
+                    "COLSPAN" => 0
+                ],
+                [
+                    "TEXT" => "",
+                    "COLSPAN" => 3
+                ],
+            ];
+
+            $encabezado2 = [
+                [
+                    "TEXT" => "",
+                    "COLSPAN" => 5
+                ],
+                
+            ];
+
+            // Obtener el encabezado 2
+            $sql = "SELECT ID, NOMBRE AS TEXT
+                    FROM CATASTRO.CDO_CRITERIO_CC";
+
+            $stid = oci_parse($this->dbConn, $sql);
+            oci_execute($stid);
+
+            $encabezado3 = [
+                [
+                    "TEXT" => "No.",
+                    "COLSPAN" => 1
+                ],
+                [
+                    "TEXT" => "Usuario",
+                    "COLSPAN" => 1
+                ],
+                // [
+                //     "TEXT" => "Fecha de Operación",
+                //     "COLSPAN" => 1
+                // ],
+                // [
+                //     "TEXT" => "Tipo de Operación",
+                //     "COLSPAN" => 1
+                // ],
+                [
+                    "TEXT" => "No. IUSI-CASO",
+                    "COLSPAN" => 1,
+                    "WIDTH" => "125px"
+                ],
+                [
+                    "TEXT" => "No. WF",
+                    "COLSPAN" => 1,
+                    "WIDTH" => "125px"
+                ],
+                [
+                    "TEXT" => "Fecha de Entrega",
+                    "COLSPAN" => 1
+                ],
+                // [
+                //     "TEXT" => "Cantidad de Matriculas",
+                //     "COLSPAN" => 1
+                // ],
+            ];
+
+            $i = 0;
+
+            while ($row = oci_fetch_array($stid, OCI_ASSOC)) {
+                
+                $id = $row["ID"];
+
+                $sql = "SELECT NOMBRE AS TEXT
+                        FROM CATASTRO.CDO_DETALLE_CRITERIO_CC
+                        WHERE ID_CRITERIO = $id";
+
+                $stid_ = oci_parse($this->dbConn, $sql);
+                oci_execute($stid_);
+
+                $temp = [];
+
+                while ($row_ = oci_fetch_array($stid_, OCI_ASSOC)) {
+                    
+                    $row_["COLSPAN"] = 1;
+                    $row_["WIDTH"] = '150px';
+                    $encabezado3 [] = $row_;
+                    $temp [] = $row_;
+                    $i++;
+                }
+
+                $encabezado1[1]["COLSPAN"] = $i;
+
+                $row["COLSPAN"] = count($temp);
+                $encabezado2 [] = $row; 
+
+            }
+
+            $end = [
+                [
+                    "TEXT" => "Total Errores",
+                    "COLSPAN" => 1
+                ],
+                [
+                    "TEXT" => "Resultado",
+                    "COLSPAN" => 1
+                ],
+                [
+                    "TEXT" => "Responsable de CC.",
+                    "COLSPAN" => 1
+                ],
+            ];
+
+            foreach ($end as $item) {
+                array_push($encabezado3, $item); 
+            }
+
+            $data = [
+                "headers" => [
+                    $encabezado1, $encabezado2, $encabezado3
+                ],
+                "items" => $expedientes,
+            ];
+
+            $this->returnResponse(SUCCESS_RESPONSE, $data);
 
         }
 
