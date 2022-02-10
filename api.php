@@ -1006,8 +1006,6 @@
 
             /* Obtener usuario  */
 
-            //$this->returnResponse(SUCCESS_RESPONSE, $usuario);
-
             // Verificaciones
             $sql = "SELECT *
                     FROM CATASTRO.CDO_DETALLE_CRITERIO_CC";
@@ -1023,8 +1021,15 @@
 
             }
 
-            $sql = "SELECT CD.CODIGOCLASE, CD.DOCUMENTO, CD.ANIO, TO_CHAR(CD.FECHA, 'DD/MM/YYYY') AS FECHA_INGRESO, 
-                    CB.USER_APLIC USUARIO, TO_CHAR(CB.FECHA_FINALIZACION, 'DD/MM/YYYY') AS FECHA_FINALIZACION, CB.CODTRAMITE, CT.NOMBRE TRAMITE
+            $sql = "SELECT 
+                        CD.CODIGOCLASE, 
+                        CD.DOCUMENTO, 
+                        CD.ANIO, 
+                        TO_CHAR(CD.FECHA, 'DD/MM/YYYY') AS FECHA_INGRESO, 
+                        CB.USER_APLIC USUARIO, 
+                        TO_CHAR(CB.FECHA_FINALIZACION, 'DD/MM/YYYY') AS FECHA_FINALIZACION, 
+                        CB.CODTRAMITE, 
+                        CT.NOMBRE TRAMITE
                     FROM CDO_BANDEJA CB, CDO_DOCUMENTO CD, CDO_TRAMITE CT
                     WHERE CB.CODIGOCLASE = CD.CODIGOCLASE
                     AND CB.DOCUMENTO = CD.DOCUMENTO
@@ -1087,6 +1092,7 @@
                 }
 
                 $row["CRITERIOS"] = $temp_criterios;
+                $row["RESULTADO"] = in_array(1, $tem_criterios) ? 'RECHAZADO' : 'ACEPTADO';
                 $expedientes [] = $row; 
 
             }
@@ -1130,14 +1136,6 @@
                     "TEXT" => "Usuario",
                     "COLSPAN" => 1
                 ],
-                // [
-                //     "TEXT" => "Fecha de Operación",
-                //     "COLSPAN" => 1
-                // ],
-                // [
-                //     "TEXT" => "Tipo de Operación",
-                //     "COLSPAN" => 1
-                // ],
                 [
                     "TEXT" => "No. IUSI-CASO",
                     "COLSPAN" => 1,
@@ -1151,11 +1149,7 @@
                 [
                     "TEXT" => "Fecha de Entrega",
                     "COLSPAN" => 1
-                ],
-                // [
-                //     "TEXT" => "Cantidad de Matriculas",
-                //     "COLSPAN" => 1
-                // ],
+                ]
             ];
 
             $i = 0;
