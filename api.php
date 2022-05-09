@@ -718,6 +718,7 @@
                     $query = "  SELECT *
                                 FROM CATASTRO.CDO_CRITERIO_CC
                                 WHERE FASE = '$i'
+                                AND DELETED_AT IS NULL
                                 ORDER BY ORDEN ASC";
 
                     $stid_ = oci_parse($this->dbConn, $query);
@@ -736,6 +737,7 @@
                         $query = "  SELECT *
                                     FROM CATASTRO.CDO_DETALLE_CRITERIO_CC
                                     WHERE ID_CRITERIO = '$id_criterio'
+                                    AND DELETED_AT IS NULL
                                     ORDER BY ORDEN ASC";
 
                         $stid2 = oci_parse($this->dbConn, $query);
